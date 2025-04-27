@@ -29,15 +29,15 @@ namespace REST.Models.DTOs
     public class TaskBasicInfoDto
     {
         public long TaskId { get; set; }
-        public string Name { get; set; }
-        public long StatusId { get; set; }
+        public string Title { get; set; }
+        public long? StatusId { get; set; }
 
         public static TaskBasicInfoDto FromTask(Task task)
         {
             return new TaskBasicInfoDto
             {
                 TaskId = task.TaskId,
-                Name = task.Name,
+                Title = task.Title,
                 StatusId = task.StatusId
             };
         }

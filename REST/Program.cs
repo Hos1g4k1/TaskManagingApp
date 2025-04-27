@@ -20,6 +20,7 @@ builder.Services.AddScoped<Supabase.Client>(
 builder.Services.AddScoped<IStatusRepository, StatusRepository>();
 builder.Services.AddScoped<ICommentRepository, CommentRepository>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 builder.Services.AddControllers();
 builder.Services.AddControllers().AddNewtonsoftJson();
 
