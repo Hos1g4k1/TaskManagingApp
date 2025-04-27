@@ -4,7 +4,7 @@ using Supabase.Postgrest.Models;
 
 namespace REST.Models
 {
-    [Table("projects")]
+    [Table("Project")]
     public partial class Project : BaseModel
     {
         [PrimaryKey("project_id")]
@@ -23,11 +23,11 @@ namespace REST.Models
         public DateTime? EndDate { get; set; }
 
         [Column("status_id")]
-        public long StatusId { get; set; }
+        public long? StatusId { get; set; }
 
         [Reference(typeof(Status))]
-        public Status Status { get; set; }
+        public Status? Status { get; set; }
 
-        public List<Task> Tasks { get; set; } = new();
+        // public List<Task> Tasks { get; set; } = new();
     }
 }
