@@ -1,0 +1,88 @@
+@using BlazorWebApp.Models
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Filter Projects</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="searchTerm" class="form-label">Search</label>
+            <input type="text" class="form-control" id="searchTerm" @bind-value="SearchTerm" @bind-value:event="oninput"
+                placeholder="Search by name or description..." />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Status</label>
+            <div class="d-flex flex-wrap">
+                <div class="form-check me-3">
+                    <input class="form-check-input" type="checkbox" id="all" checked="@(SelectedStatusIds.Count == 0)"
+                        @onchange="@(() => ToggleAllStatuses())" />
+                    <label class="form-check-label" for="all">All</label>
+                </div>
+                @foreach (var status in Statuses)
+                {
+                    var statusId = status.Key;
+                    var statusName = status.Value;
+                    <div class="form-check me-3">
+                        <input class="form-check-input" type="checkbox" id="status-@statusId"
+                            checked="@(SelectedStatusIds.Contains(statusId))" @onchange="@(() => ToggleStatus(statusId))" />
+                        <label class="form-check-label" for="status-@statusId">@statusName</label>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <button class="btn btn-primary" @onclick="ApplyFilters">Apply Filters</button>
+        <button class="btn btn-outline-secondary ms-2" @onclick="ResetFilters">Reset</button>
+    </div>
+</div>
+
+@code {
+    private string SearchTerm { get; set; } = string.Empty;
+    private HashSet<long> SelectedStatusIds { get; set; } = new();
+
+    [Parameter]
+    public Dictionary<long, string> Statuses { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<FilterCriteria> OnFilterChanged { get; set; }
+
+    private void ToggleStatus(long statusId)
+    {
+        if (SelectedStatusIds.Contains(statusId))
+            SelectedStatusIds.Remove(statusId);
+        else
+            SelectedStatusIds.Add(statusId);
+    }
+
+    private void ToggleAllStatuses()
+    {
+        if (SelectedStatusIds.Count > 0)
+            SelectedStatusIds.Clear();
+        else
+            SelectedStatusIds = new HashSet<long>(Statuses.Keys);
+    }
+
+    private async Task ApplyFilters()
+    {
+        var criteria = new FilterCriteria
+        {
+            SearchTerm = SearchTerm,
+            StatusIds = SelectedStatusIds.ToList()
+        };
+        await OnFilterChanged.InvokeAsync(criteria);
+    }
+
+    private async Task ResetFilters()
+    {
+        SearchTerm = string.Empty;
+        SelectedStatusIds.Clear();
+        await ApplyFilters();
+    }
+
+    public class FilterCriteria
+    {
+        public string SearchTerm { get; set; } = string.Empty;
+        public List<long> StatusIds { get; set; } = new();
+    }
+}

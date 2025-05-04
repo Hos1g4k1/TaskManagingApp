@@ -1,0 +1,150 @@
+@page "/projects/create"
+@using BlazorWebApp.Models
+@using BlazorWebApp.Services
+@inject ProjectService ProjectService
+@inject StatusService StatusService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Create Project - Task Management</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Create New Project</h1>
+        <button class="btn btn-outline-secondary" @onclick="NavigateBack">
+            <i class="bi bi-arrow-left"></i> Back
+        </button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <EditForm Model="@Project" OnValidSubmit="HandleValidSubmit">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Name</label>
+                        <InputText id="name" class="form-control" @bind-Value="Project.Name" />
+                        <ValidationMessage For="@(() => Project.Name)" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <InputTextArea id="description" class="form-control" rows="3" @bind-Value="Project.Description" />
+                        <ValidationMessage For="@(() => Project.Description)" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="startDate" class="form-label">Start Date</label>
+                            <InputDate id="startDate" class="form-control" @bind-Value="Project.StartDate" />
+                            <ValidationMessage For="@(() => Project.StartDate)" />
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="endDate" class="form-label">End Date</label>
+                            <InputDate id="endDate" class="form-control" @bind-Value="Project.EndDate" />
+                            <ValidationMessage For="@(() => Project.EndDate)" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select id="status" class="form-select" @bind="Project.StatusId">
+                            <option value="">-- Select Status --</option>
+                            @foreach (var status in Statuses)
+                            {
+                                <option value="@status.StatusId">@status.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <button type="button" class="btn btn-outline-secondary me-2" @onclick="NavigateBack">Cancel</button>
+                        <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+                            @if (IsSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <span>Create Project</span>
+                            }
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private Project Project { get; set; } = new Project
+    {
+        StartDate = DateTime.Today
+    };
+    private List<Status> Statuses { get; set; } = new();
+    private bool IsSaving { get; set; } = false;
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Statuses = await StatusService.GetAllStatusesAsync();
+
+            // Set default status if available
+            if (Statuses.Any())
+            {
+                Project.StatusId = Statuses.FirstOrDefault()?.StatusId;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statuses: {ex.Message}");
+            // In a production app, would handle this error properly
+        }
+
+        IsLoading = false;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        IsSaving = true;
+
+        try
+        {
+            var createdProject = await ProjectService.CreateProjectAsync(Project);
+            if (createdProject != null)
+            {
+                NavigationManager.NavigateTo($"/projects/{createdProject.ProjectId}");
+            }
+            else
+            {
+                // Handle error case - in a real app, show an error message
+                IsSaving = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            // In a real app, handle the error (log, display to user, etc.)
+            Console.WriteLine($"Error creating project: {ex.Message}");
+            IsSaving = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/dashboard");
+    }
+}

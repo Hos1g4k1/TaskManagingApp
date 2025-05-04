@@ -1,0 +1,28 @@
+@using BlazorWebApp.Models
+
+<div class="card project-card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">@Project.Name</h5>
+        <span class="badge bg-primary">@Project.StatusName</span>
+    </div>
+    <div class="card-body">
+        <p class="card-text">@Project.Description</p>
+        <div class="d-flex justify-content-between">
+            <small class="text-muted">
+                Start: @(Project.StartDate?.ToShortDateString() ?? "Not set")
+            </small>
+            <small class="text-muted">
+                End: @(Project.EndDate?.ToShortDateString() ?? "Not set")
+            </small>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-end">
+        <a href="/projects/@Project.ProjectId" class="btn btn-sm btn-primary me-2">Details</a>
+        <a href="/projects/edit/@Project.ProjectId" class="btn btn-sm btn-secondary">Edit</a>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Project Project { get; set; } = new();
+}

@@ -1,0 +1,27 @@
+@using BlazorWebApp.Models
+@using BlazorWebApp.Components.Projects
+
+<div class="row">
+    @if (Projects == null || !Projects.Any())
+    {
+        <div class="col-12">
+            <div class="alert alert-info">
+                No projects found. Create a new project to get started.
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var project in Projects)
+        {
+            <div class="col-md-6 col-lg-4">
+                <ProjectCard Project="project" />
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<Project>? Projects { get; set; }
+}

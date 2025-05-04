@@ -4,7 +4,7 @@ using Supabase.Postgrest.Models;
 
 namespace REST.Models
 {
-    [Table("task_dependencies")]
+    [Table("TaskDependency")]
     public partial class TaskDependency : BaseModel
     {
         [PrimaryKey("dependency_id")]
@@ -17,10 +17,10 @@ namespace REST.Models
         public long DependentTaskId { get; set; }
 
         [Reference(typeof(Task))]
-        public Task Task { get; set; }
+        public Task? Task { get; set; }
 
         [Reference(typeof(Task))]
-        public Task DependentTask { get; set; }
+        public Task? DependentTask { get; set; }
     }
 }
 

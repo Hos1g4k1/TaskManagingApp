@@ -1,0 +1,108 @@
+@page "/projects/{Id:long}"
+@using BlazorWebApp.Models
+@using BlazorWebApp.Services
+@inject ProjectService ProjectService
+@inject StatusService StatusService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Project Details - Task Management</PageTitle>
+
+<div class="container">
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (Project == null)
+    {
+        <div class="alert alert-danger">
+            Project not found or could not be loaded.
+        </div>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>@Project.Name</h1>
+            <div>
+                <button class="btn btn-outline-primary me-2" @onclick="NavigateBack">
+                    <i class="bi bi-arrow-left"></i> Back
+                </button>
+                <a href="/projects/edit/@Project.ProjectId" class="btn btn-secondary">
+                    <i class="bi bi-pencil"></i> Edit
+                </a>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Status:</div>
+                    <div class="col-md-9">
+                        <span class="badge bg-primary">@Project.StatusName</span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Description:</div>
+                    <div class="col-md-9">@Project.Description</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Start Date:</div>
+                    <div class="col-md-9">@(Project.StartDate?.ToShortDateString() ?? "Not set")</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">End Date:</div>
+                    <div class="col-md-9">@(Project.EndDate?.ToShortDateString() ?? "Not set")</div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Tasks</h2>
+        <div class="alert alert-info">
+            Task list will be implemented in future updates.
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public long Id { get; set; }
+
+    private Project? Project { get; set; }
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        IsLoading = true;
+
+        try
+        {
+            Project = await ProjectService.GetProjectByIdAsync(Id);
+
+            // If status name is missing but we have a status ID, fetch the status name
+            if (Project != null && Project.StatusId.HasValue && string.IsNullOrEmpty(Project.StatusName))
+            {
+                var status = await StatusService.GetStatusByIdAsync(Project.StatusId.Value);
+                if (status != null)
+                {
+                    Project.StatusName = status.Name;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // In a real app, handle the error (log, display to user, etc.)
+            Console.WriteLine($"Error loading project: {ex.Message}");
+            Project = null;
+        }
+
+        IsLoading = false;
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/dashboard");
+    }
+}

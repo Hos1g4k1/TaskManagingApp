@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using BlazorWebApp;
-
-// builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+using BlazorWebApp.Services;
 
 namespace project
 {
@@ -13,11 +12,18 @@ namespace project
             var builder = WebAssemblyHostBuilder.CreateDefault(args);
             builder.RootComponents.Add<App>("#app");
 
-            builder.Services.AddScoped(sp => 
-                new HttpClient { BaseAddress = new Uri(
-                    builder.HostEnvironment.BaseAddress) });
-            // builder.Services.AddScoped<IActorService, ActorService>();
-            // builder.Services.AddSingleton<IMessagingService, MessagingService>();
+            // Configure HTTP client to point to the REST API
+            builder.Services.AddScoped(sp =>
+                new HttpClient
+                {
+                    BaseAddress = new Uri(
+                    builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress)
+                });
+
+            // Register services
+            builder.Services.AddScoped<HttpClientService>();
+            builder.Services.AddScoped<ProjectService>();
+            builder.Services.AddScoped<StatusService>();
 
             await builder.Build().RunAsync();
         }

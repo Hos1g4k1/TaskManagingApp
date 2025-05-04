@@ -1,0 +1,112 @@
+@page "/"
+@page "/dashboard"
+@using BlazorWebApp.Models
+@using BlazorWebApp.Services
+@using BlazorWebApp.Components.Projects
+@inject ProjectService ProjectService
+@inject StatusService StatusService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Dashboard - Task Management</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Projects Dashboard</h1>
+        <button class="btn btn-success" @onclick="NavigateToCreateProject">
+            <i class="bi bi-plus-circle"></i> New Project
+        </button>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-3">
+            <ProjectFilter Statuses="@StatusDictionary" OnFilterChanged="HandleFilterChanged" />
+        </div>
+        <div class="col-lg-9">
+            @if (IsLoading)
+            {
+                <div class="d-flex justify-content-center my-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <ProjectList Projects="@FilteredProjects" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Project> AllProjects { get; set; } = new();
+    private List<Project> FilteredProjects { get; set; } = new();
+    private Dictionary<long, string> StatusDictionary { get; set; } = new();
+    private List<Status> Statuses { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadProjectsAsync(), LoadStatusesAsync());
+
+        // Map status IDs to names for any projects with missing status names
+        foreach (var project in AllProjects.Where(p => p.StatusId.HasValue && string.IsNullOrEmpty(p.StatusName)))
+        {
+            var status = Statuses.FirstOrDefault(s => s.StatusId == project.StatusId);
+            if (status != null)
+            {
+                project.StatusName = status.Name;
+            }
+        }
+
+        FilteredProjects = AllProjects;
+        IsLoading = false;
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        try
+        {
+            AllProjects = await ProjectService.GetAllProjectsAsync();
+        }
+        catch (Exception ex)
+        {
+            // In a real app, handle the error (log, display to user, etc.)
+            Console.WriteLine($"Error loading projects: {ex.Message}");
+            AllProjects = new List<Project>();
+        }
+    }
+
+    private async Task LoadStatusesAsync()
+    {
+        try
+        {
+            Statuses = await StatusService.GetAllStatusesAsync();
+            StatusDictionary = Statuses.ToDictionary(s => s.StatusId, s => s.Name ?? "Unknown");
+        }
+        catch (Exception ex)
+        {
+            // In a real app, handle the error (log, display to user, etc.)
+            Console.WriteLine($"Error loading statuses: {ex.Message}");
+            Statuses = new List<Status>();
+            StatusDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private void HandleFilterChanged(ProjectFilter.FilterCriteria criteria)
+    {
+        FilteredProjects = AllProjects
+        .Where(p =>
+        (string.IsNullOrWhiteSpace(criteria.SearchTerm) ||
+        (p.Name?.Contains(criteria.SearchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+        (p.Description?.Contains(criteria.SearchTerm, StringComparison.OrdinalIgnoreCase) == true)) &&
+        (!criteria.StatusIds.Any() || (p.StatusId.HasValue && criteria.StatusIds.Contains(p.StatusId.Value)))
+        )
+        .ToList();
+    }
+
+    private void NavigateToCreateProject()
+    {
+        NavigationManager.NavigateTo("/projects/create");
+    }
+}
