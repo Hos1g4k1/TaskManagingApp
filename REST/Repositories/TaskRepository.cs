@@ -28,7 +28,7 @@ namespace REST.Repositories
                 .Get();
 
             var tasks = response.Models;
-            
+
             // Load related entities for each task
             foreach (var task in tasks)
             {
@@ -39,6 +39,12 @@ namespace REST.Repositories
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error loading related entities for task {TaskId}, continuing with partial data", task.TaskId);
+
+                    // Ensure task has at least basic collections initialized
+                    if (task.Comments == null)
+                    {
+                        task.Comments = new List<Comment>();
+                    }
                 }
             }
 
@@ -51,26 +57,44 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Attempting to fetch task with ID {TaskId}", taskId);
-                
-                // Get the raw response first
-                var response = await _supabaseClient
-                    .From<Models.Task>()
-                    .Where(t => t.TaskId == taskId)
-                    .Get();
-                    
-                if (response == null || response.Models.Count == 0)
+
+                // Try up to 3 times with increasing delays to handle read-after-write consistency issues
+                for (int attempt = 1; attempt <= 3; attempt++)
                 {
-                    _logger.LogWarning("Task with ID {TaskId} was not found", taskId);
-                    throw new Exception($"Task with ID {taskId} not found");
+                    var response = await _supabaseClient
+                        .From<Models.Task>()
+                        .Where(t => t.TaskId == taskId)
+                        .Get();
+
+                    if (response != null && response.Models.Count > 0)
+                    {
+                        var task = response.Models.First();
+
+                        // Load related entities safely
+                        try
+                        {
+                            await LoadRelatedEntitiesSafely(task);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Ensure task has at least basic collections initialized
+                            if (task.Comments == null)
+                            {
+                                task.Comments = new List<Comment>();
+                            }
+                        }
+
+                        return task;
+                    }
+
+                    if (attempt < 3)
+                    {
+                        var delayMs = attempt * 200; // 200ms, 400ms delays
+                        await System.Threading.Tasks.Task.Delay(delayMs);
+                    }
                 }
-                
-                var task = response.Models.First();
-                
-                // Load related entities safely
-                await LoadRelatedEntitiesSafely(task);
-                
-                _logger.LogInformation("Successfully fetched task with ID {TaskId}", taskId);
-                return task;
+
+                throw new Exception($"Task with ID {taskId} not found");
             }
             catch (Exception ex)
             {
@@ -84,7 +108,7 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Direct fetch attempt for task with ID {TaskId}", taskId);
-                
+
                 // Simple direct query without loading relationships
                 var task = await _supabaseClient
                     .From<Models.Task>()
@@ -96,7 +120,6 @@ namespace REST.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error direct fetching task with ID {TaskId}. Details: {ErrorMessage}", 
                     taskId, ex.ToString());
                 throw;
             }
@@ -107,18 +130,18 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Fetching tasks for project with ID {ProjectId}", projectId);
-                
+
                 var response = await _supabaseClient
                     .From<Models.Task>()
                     .Where(t => t.ProjectId == projectId)
                     .Get();
-                    
+
                 if (response == null)
                 {
                     _logger.LogWarning("No tasks found for project with ID {ProjectId}", projectId);
                     return new List<Models.Task>();
                 }
-                
+
                 var tasks = response.Models;
 
                 // Load related entities for each task
@@ -131,6 +154,12 @@ namespace REST.Repositories
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Error loading related entities for task {TaskId}, continuing with partial data", task.TaskId);
+
+                        // Ensure task has at least basic collections initialized
+                        if (task.Comments == null)
+                        {
+                            task.Comments = new List<Comment>();
+                        }
                     }
                 }
 
@@ -148,43 +177,27 @@ namespace REST.Repositories
         {
             try
             {
-                // Clear navigation properties before inserting
-                var project = task.Project;
-                var status = task.Status;
-                var comments = task.Comments;
-                
-                task.Project = null;
-                task.Status = null;
-                task.Comments = null;
 
+                // SIMPLIFIED: Use the same approach as Project (which works)
                 var response = await _supabaseClient
                     .From<Models.Task>()
                     .Insert(task);
 
-                _logger.LogInformation("Added new task with title {TaskTitle}", task.Title);
+
                 var newTask = response.Models.FirstOrDefault();
-                
+
                 if (newTask != null)
                 {
-                    // Restore navigation properties if needed
-                    newTask.Project = project;
-                    newTask.Status = status;
-                    newTask.Comments = comments;
-                    
+
                     return newTask;
                 }
                 else
                 {
-                    // If no task was returned, return the original task
-                    task.Project = project;
-                    task.Status = status;
-                    task.Comments = comments;
                     return task;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error adding task with title {TaskTitle}", task.Title);
                 throw;
             }
         }
@@ -197,7 +210,7 @@ namespace REST.Repositories
                 var project = task.Project;
                 var status = task.Status;
                 var comments = task.Comments;
-                
+
                 task.Project = null;
                 task.Status = null;
                 task.Comments = null;
@@ -209,14 +222,14 @@ namespace REST.Repositories
 
                 _logger.LogInformation("Updated task with ID {TaskId}", task.TaskId);
                 var updatedTask = response.Models.FirstOrDefault();
-                
+
                 if (updatedTask != null)
                 {
                     // Restore navigation properties if needed
                     updatedTask.Project = project;
                     updatedTask.Status = status;
                     updatedTask.Comments = comments;
-                    
+
                     return updatedTask;
                 }
                 else
@@ -277,6 +290,9 @@ namespace REST.Repositories
         // Helper method to safely load related entities
         private async System.Threading.Tasks.Task LoadRelatedEntitiesSafely(Models.Task task)
         {
+            // Always initialize Collections to prevent null reference issues
+            task.Comments = new List<Comment>();
+
             // Load Status if StatusId has value
             if (task.StatusId.HasValue)
             {
@@ -286,7 +302,7 @@ namespace REST.Repositories
                         .From<Status>()
                         .Where(s => s.StatusId == task.StatusId.Value)
                         .Get();
-                        
+
                     if (status != null && status.Models.Count > 0)
                     {
                         task.Status = status.Models.First();
@@ -297,7 +313,7 @@ namespace REST.Repositories
                     _logger.LogWarning(ex, "Could not load Status for Task {TaskId}", task.TaskId);
                 }
             }
-            
+
             // Load Project
             try
             {
@@ -305,7 +321,7 @@ namespace REST.Repositories
                     .From<Project>()
                     .Where(p => p.ProjectId == task.ProjectId)
                     .Get();
-                    
+
                 if (project != null && project.Models.Count > 0)
                 {
                     task.Project = project.Models.First();
@@ -315,23 +331,27 @@ namespace REST.Repositories
             {
                 _logger.LogWarning(ex, "Could not load Project for Task {TaskId}", task.TaskId);
             }
-            
-            // Load Comments
+
+            // Load Comments - Make this completely safe and optional
             try
             {
                 var comments = await _supabaseClient
                     .From<Comment>()
                     .Where(c => c.TaskId == task.TaskId)
                     .Get();
-                    
-                if (comments != null)
+
+                if (comments != null && comments.Models != null)
                 {
                     task.Comments = comments.Models;
+                }
+                else
+                {
+                    task.Comments = new List<Comment>(); // Ensure it's never null
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not load Comments for Task {TaskId}", task.TaskId);
+                task.Comments = new List<Comment>(); // Ensure it's never null even on error
             }
         }
 
@@ -341,27 +361,27 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Getting task by SQL for ID {TaskId}", taskId);
-                
+
                 // Use raw query to bypass Supabase ORM issues
-                var result = await _supabaseClient.Postgrest.Rpc("get_task_by_id", new Dictionary<string, object> 
+                var result = await _supabaseClient.Postgrest.Rpc("get_task_by_id", new Dictionary<string, object>
                 {
                     { "p_task_id", taskId }
                 });
-                
+
                 if (string.IsNullOrEmpty(result?.Content) || result.Content == "null")
                 {
                     throw new Exception($"Task with ID {taskId} not found");
                 }
-                
+
                 // Parse the JSON result manually
                 var taskData = System.Text.Json.JsonDocument.Parse(result.Content).RootElement;
-                
+
                 var task = new Models.Task
                 {
                     TaskId = taskData.GetProperty("task_id").GetInt64(),
                     Title = taskData.GetProperty("title").GetString(),
                     ProjectId = taskData.GetProperty("project_id").GetInt64(),
-                    StatusId = taskData.TryGetProperty("status_id", out var statusIdProp) && !statusIdProp.ValueKind.Equals(System.Text.Json.JsonValueKind.Null) 
+                    StatusId = taskData.TryGetProperty("status_id", out var statusIdProp) && !statusIdProp.ValueKind.Equals(System.Text.Json.JsonValueKind.Null)
                         ? statusIdProp.GetInt64() : null,
                     Description = taskData.TryGetProperty("description", out var descProp) && !descProp.ValueKind.Equals(System.Text.Json.JsonValueKind.Null)
                         ? descProp.GetString() : null,
@@ -370,7 +390,7 @@ namespace REST.Repositories
                     CreatedAt = taskData.TryGetProperty("created_at", out var createdAtProp) && !createdAtProp.ValueKind.Equals(System.Text.Json.JsonValueKind.Null)
                         ? DateTime.Parse(createdAtProp.GetString()) : DateTime.UtcNow
                 };
-                
+
                 // Load related entities separately
                 try
                 {
@@ -380,7 +400,7 @@ namespace REST.Repositories
                 {
                     _logger.LogWarning(ex, "Error loading related entities for task {TaskId}, continuing with partial data", taskId);
                 }
-                
+
                 return task;
             }
             catch (Exception ex)
@@ -390,4 +410,4 @@ namespace REST.Repositories
             }
         }
     }
-} 
+}

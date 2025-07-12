@@ -1,0 +1,209 @@
+@page "/tasks"
+@using BlazorWebApp.Models
+@using BlazorWebApp.Services
+@using BlazorWebApp.Components.Tasks
+@using static BlazorWebApp.Components.Tasks.TaskFilter
+@inject TaskService TaskService
+@inject StatusService StatusService
+@inject ProjectService ProjectService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Tasks - Task Management</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Task Management</h1>
+        <button class="btn btn-success" @onclick="NavigateToCreateTask">
+            <i class="bi bi-plus-circle"></i> New Task
+        </button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-lg-3">
+                <TaskFilter Statuses="@StatusDictionary" Projects="@ProjectDictionary"
+                    OnFilterChanged="HandleFilterChanged" />
+            </div>
+            <div class="col-lg-9">
+                <TaskList Tasks="@FilteredTasks" OnCreateTask="NavigateToCreateTask" OnDeleteTask="HandleDeleteTask" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<TaskItem> AllTasks { get; set; } = new();
+    private List<TaskItem> FilteredTasks { get; set; } = new();
+    private Dictionary<long, string> StatusDictionary { get; set; } = new();
+    private Dictionary<long, string> ProjectDictionary { get; set; } = new();
+    private List<Status> Statuses { get; set; } = new();
+    private List<Project> Projects { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+
+    protected override async System.Threading.Tasks.Task OnInitializedAsync()
+    {
+        await LoadData();
+        IsLoading = false;
+    }
+
+    private async System.Threading.Tasks.Task LoadData()
+    {
+        try
+        {
+            await System.Threading.Tasks.Task.WhenAll(
+            LoadTasksAsync(),
+            LoadStatusesAsync(),
+            LoadProjectsAsync()
+            );
+
+            FilteredTasks = AllTasks;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadTasksAsync()
+    {
+        try
+        {
+            AllTasks = await TaskService.GetAllTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tasks: {ex.Message}");
+            AllTasks = new List<TaskItem>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadStatusesAsync()
+    {
+        try
+        {
+            Statuses = await StatusService.GetAllStatusesAsync();
+            StatusDictionary = Statuses.ToDictionary(s => s.StatusId, s => s.Name ?? "Unknown");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statuses: {ex.Message}");
+            Statuses = new List<Status>();
+            StatusDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadProjectsAsync()
+    {
+        try
+        {
+            Projects = await ProjectService.GetAllProjectsAsync();
+            ProjectDictionary = Projects.ToDictionary(p => p.ProjectId, p => p.Name ?? "Unknown");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading projects: {ex.Message}");
+            Projects = new List<Project>();
+            ProjectDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private void HandleFilterChanged(TaskFilterCriteria criteria)
+    {
+        FilteredTasks = AllTasks.Where(task => MatchesFilter(task, criteria)).ToList();
+
+        // Apply sorting
+        FilteredTasks = criteria.SortBy switch
+        {
+            "due-date" => FilteredTasks.OrderBy(t => t.DueDate ?? DateTime.MaxValue).ToList(),
+            "status" => FilteredTasks.OrderBy(t => t.StatusName ?? "").ToList(),
+            "project" => FilteredTasks.OrderBy(t => t.ProjectName ?? "").ToList(),
+            "created" => FilteredTasks.OrderByDescending(t => t.CreatedAt).ToList(),
+            _ => FilteredTasks.OrderBy(t => t.Title).ToList()
+        };
+    }
+
+    private bool MatchesFilter(TaskItem task, TaskFilterCriteria criteria)
+    {
+        // Search term filter
+        if (!string.IsNullOrWhiteSpace(criteria.SearchTerm))
+        {
+            var searchTerm = criteria.SearchTerm.ToLower();
+            var matchesTitle = task.Title.ToLower().Contains(searchTerm);
+            var matchesDescription = task.Description?.ToLower().Contains(searchTerm) ?? false;
+            var matchesProject = task.ProjectName?.ToLower().Contains(searchTerm) ?? false;
+
+            if (!matchesTitle && !matchesDescription && !matchesProject)
+            {
+                return false;
+            }
+        }
+
+        // Status filter
+        if (criteria.StatusIds.Any() && task.StatusId.HasValue)
+        {
+            if (!criteria.StatusIds.Contains(task.StatusId.Value))
+            {
+                return false;
+            }
+        }
+
+        // Project filter
+        if (criteria.ProjectIds.Any())
+        {
+            if (!criteria.ProjectIds.Contains(task.ProjectId))
+            {
+                return false;
+            }
+        }
+
+        // Due date filter
+        if (!string.IsNullOrWhiteSpace(criteria.DueDateFilter))
+        {
+            var now = DateTime.Now;
+            var matches = criteria.DueDateFilter switch
+            {
+                "overdue" => task.DueDate.HasValue && task.DueDate.Value < now,
+                "today" => task.DueDate.HasValue && task.DueDate.Value.Date == now.Date,
+                "this-week" => task.DueDate.HasValue && task.DueDate.Value >= now && task.DueDate.Value <= now.AddDays(7),
+                "this-month" => task.DueDate.HasValue && task.DueDate.Value >= now && task.DueDate.Value <= now.AddMonths(1),
+                "no-due-date" => !task.DueDate.HasValue,
+                _ => true
+            };
+
+            if (!matches)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void NavigateToCreateTask()
+    {
+        NavigationManager.NavigateTo("/tasks/create");
+    }
+
+    private async System.Threading.Tasks.Task HandleDeleteTask(long taskId)
+    {
+        try
+        {
+            await TaskService.DeleteTaskAsync(taskId);
+            await LoadTasksAsync();
+            FilteredTasks = AllTasks;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting task: {ex.Message}");
+        }
+    }
+}

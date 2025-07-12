@@ -1,0 +1,135 @@
+@using BlazorWebApp.Models
+
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">Filter Tasks</h6>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="searchTerm" class="form-label">Search</label>
+            <input type="text" id="searchTerm" class="form-control" placeholder="Search tasks..."
+                @bind="FilterCriteria.SearchTerm" @oninput="OnSearchChanged" />
+        </div>
+
+        <div class="mb-3">
+            <label for="statusFilter" class="form-label">Status</label>
+            <select id="statusFilter" class="form-select" @bind="SelectedStatusId" @bind:after="OnStatusChanged">
+                <option value="">All Statuses</option>
+                @if (Statuses != null)
+                {
+                    @foreach (var status in Statuses)
+                    {
+                        <option value="@status.Key">@status.Value</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="projectFilter" class="form-label">Project</label>
+            <select id="projectFilter" class="form-select" @bind="SelectedProjectId" @bind:after="OnProjectChanged">
+                <option value="">All Projects</option>
+                @if (Projects != null)
+                {
+                    @foreach (var project in Projects)
+                    {
+                        <option value="@project.Key">@project.Value</option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="dueDateFilter" class="form-label">Due Date</label>
+            <select id="dueDateFilter" class="form-select" @bind="FilterCriteria.DueDateFilter"
+                @bind:after="OnDueDateChanged">
+                <option value="">All Tasks</option>
+                <option value="overdue">Overdue</option>
+                <option value="today">Due Today</option>
+                <option value="this-week">Due This Week</option>
+                <option value="this-month">Due This Month</option>
+                <option value="no-due-date">No Due Date</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="sortBy" class="form-label">Sort By</label>
+            <select id="sortBy" class="form-select" @bind="FilterCriteria.SortBy" @bind:after="OnSortChanged">
+                <option value="title">Title</option>
+                <option value="due-date">Due Date</option>
+                <option value="status">Status</option>
+                <option value="project">Project</option>
+                <option value="created">Created Date</option>
+            </select>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="ClearFilters">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Dictionary<long, string>? Statuses { get; set; }
+    [Parameter] public Dictionary<long, string>? Projects { get; set; }
+    [Parameter] public EventCallback<TaskFilterCriteria> OnFilterChanged { get; set; }
+
+    private TaskFilterCriteria FilterCriteria { get; set; } = new();
+    private string SelectedStatusId { get; set; } = "";
+    private string SelectedProjectId { get; set; } = "";
+
+    public class TaskFilterCriteria
+    {
+        public string SearchTerm { get; set; } = "";
+        public List<long> StatusIds { get; set; } = new();
+        public List<long> ProjectIds { get; set; } = new();
+        public string DueDateFilter { get; set; } = "";
+        public string SortBy { get; set; } = "title";
+    }
+
+    private async System.Threading.Tasks.Task OnSearchChanged(ChangeEventArgs e)
+    {
+        FilterCriteria.SearchTerm = e.Value?.ToString() ?? "";
+        await OnFilterChanged.InvokeAsync(FilterCriteria);
+    }
+
+    private async System.Threading.Tasks.Task OnStatusChanged()
+    {
+        FilterCriteria.StatusIds.Clear();
+        if (long.TryParse(SelectedStatusId, out var statusId))
+        {
+            FilterCriteria.StatusIds.Add(statusId);
+        }
+        await OnFilterChanged.InvokeAsync(FilterCriteria);
+    }
+
+    private async System.Threading.Tasks.Task OnProjectChanged()
+    {
+        FilterCriteria.ProjectIds.Clear();
+        if (long.TryParse(SelectedProjectId, out var projectId))
+        {
+            FilterCriteria.ProjectIds.Add(projectId);
+        }
+        await OnFilterChanged.InvokeAsync(FilterCriteria);
+    }
+
+    private async System.Threading.Tasks.Task OnDueDateChanged()
+    {
+        await OnFilterChanged.InvokeAsync(FilterCriteria);
+    }
+
+    private async System.Threading.Tasks.Task OnSortChanged()
+    {
+        await OnFilterChanged.InvokeAsync(FilterCriteria);
+    }
+
+    private async System.Threading.Tasks.Task ClearFilters()
+    {
+        FilterCriteria = new TaskFilterCriteria();
+        SelectedStatusId = "";
+        SelectedProjectId = "";
+        await OnFilterChanged.InvokeAsync(FilterCriteria);
+    }
+}

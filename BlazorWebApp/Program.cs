@@ -24,6 +24,7 @@ namespace project
             builder.Services.AddScoped<HttpClientService>();
             builder.Services.AddScoped<ProjectService>();
             builder.Services.AddScoped<StatusService>();
+            builder.Services.AddScoped<TaskService>();
 
             await builder.Build().RunAsync();
         }

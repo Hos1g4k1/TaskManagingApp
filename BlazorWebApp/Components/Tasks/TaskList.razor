@@ -1,0 +1,156 @@
+@using BlazorWebApp.Models
+@inject NavigationManager NavigationManager
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Tasks</h5>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm" @onclick="() => OnCreateTask.InvokeAsync()">
+                <i class="bi bi-plus"></i> New Task
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (Tasks == null || !Tasks.Any())
+        {
+            <div class="text-center py-4">
+                <i class="bi bi-list-task text-muted" style="font-size: 2rem;"></i>
+                <p class="text-muted mt-2">No tasks found</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Due Date</th>
+                            <th>Project</th>
+                            <th>Comments</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var task in Tasks)
+                        {
+                            <tr>
+                                <td>
+                                    <div>
+                                        <strong>@task.Title</strong>
+                                        @if (!string.IsNullOrEmpty(task.Description))
+                                        {
+                                            <br>
+                                            <small class="text-muted">@(task.Description.Length > 100 ? task.Description.Substring(0, 100) + "..." : task.Description)</small>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(task.StatusName))
+                                    {
+                                        <span class="badge @GetStatusBadgeClass(task.StatusName)">@task.StatusName</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">No Status</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (task.DueDate.HasValue)
+                                    {
+                                        var daysUntilDue = (task.DueDate.Value - DateTime.Now).Days;
+                                        <span class="@GetDueDateClass(daysUntilDue)">
+                                            @task.DueDate.Value.ToString("MMM dd, yyyy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No due date</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(task.ProjectName))
+                                    {
+                                        <span class="badge bg-info">@task.ProjectName</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (task.CommentCount > 0)
+                                    {
+                                        <span class="badge bg-primary">@task.CommentCount</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">0</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewTask(task.TaskId)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditTask(task.TaskId)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => OnDeleteTask.InvokeAsync(task.TaskId)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<TaskItem>? Tasks { get; set; }
+    [Parameter] public EventCallback OnCreateTask { get; set; }
+    [Parameter] public EventCallback<long> OnDeleteTask { get; set; }
+
+    private void ViewTask(long taskId)
+    {
+        NavigationManager.NavigateTo($"/tasks/{taskId}");
+    }
+
+    private void EditTask(long taskId)
+    {
+        NavigationManager.NavigateTo($"/tasks/edit/{taskId}");
+    }
+
+    private string GetStatusBadgeClass(string statusName)
+    {
+        return statusName.ToLower() switch
+        {
+            "completed" => "bg-success",
+            "in progress" => "bg-warning",
+            "pending" => "bg-info",
+            "blocked" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetDueDateClass(int daysUntilDue)
+    {
+        if (daysUntilDue < 0)
+        {
+            return "text-danger fw-bold"; // Overdue
+        }
+        else if (daysUntilDue == 0)
+        {
+            return "text-warning fw-bold"; // Due today
+        }
+        else if (daysUntilDue <= 3)
+        {
+            return "text-warning"; // Due soon
+        }
+        else
+        {
+            return "text-muted";
+        }
+    }
+}

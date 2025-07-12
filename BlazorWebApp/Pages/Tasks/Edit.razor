@@ -1,0 +1,159 @@
+@page "/tasks/edit/{Id:long}"
+@using BlazorWebApp.Models
+@using BlazorWebApp.Services
+@using BlazorWebApp.Components.Tasks
+@inject TaskService TaskService
+@inject ProjectService ProjectService
+@inject StatusService StatusService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Edit Task - Task Management</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Edit Task</h1>
+        <button class="btn btn-outline-secondary" @onclick="NavigateBack">
+            <i class="bi bi-arrow-left"></i> Back
+        </button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (Task == null)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-circle"></i> Task not found or could not be loaded.
+        </div>
+        <button class="btn btn-primary" @onclick="NavigateBack">
+            <i class="bi bi-arrow-left"></i> Back
+        </button>
+    }
+    else
+    {
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <TaskForm Task="@Task" Projects="@ProjectDictionary" Statuses="@StatusDictionary" IsEditMode="true"
+                    IsSaving="@IsSaving" OnSubmit="HandleSubmit" OnCancel="NavigateBack" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private TaskItem? Task { get; set; }
+    private Dictionary<long, string> ProjectDictionary { get; set; } = new();
+    private Dictionary<long, string> StatusDictionary { get; set; } = new();
+    private List<Project> Projects { get; set; } = new();
+    private List<Status> Statuses { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsSaving { get; set; } = false;
+
+    protected override async System.Threading.Tasks.Task OnInitializedAsync()
+    {
+        await LoadData();
+        IsLoading = false;
+    }
+
+    private async System.Threading.Tasks.Task LoadData()
+    {
+        try
+        {
+            await System.Threading.Tasks.Task.WhenAll(
+            LoadTaskAsync(),
+            LoadProjectsAsync(),
+            LoadStatusesAsync()
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadTaskAsync()
+    {
+        try
+        {
+            Task = await TaskService.GetTaskByIdAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading task: {ex.Message}");
+            Task = null;
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadProjectsAsync()
+    {
+        try
+        {
+            Projects = await ProjectService.GetAllProjectsAsync();
+            ProjectDictionary = Projects.ToDictionary(p => p.ProjectId, p => p.Name ?? "Unknown");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading projects: {ex.Message}");
+            Projects = new List<Project>();
+            ProjectDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadStatusesAsync()
+    {
+        try
+        {
+            Statuses = await StatusService.GetAllStatusesAsync();
+            StatusDictionary = Statuses.ToDictionary(s => s.StatusId, s => s.Name ?? "Unknown");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statuses: {ex.Message}");
+            Statuses = new List<Status>();
+            StatusDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task HandleSubmit(TaskItem task)
+    {
+        IsSaving = true;
+
+        try
+        {
+            var updatedTask = await TaskService.UpdateTaskAsync(task);
+            if (updatedTask != null)
+            {
+                NavigationManager.NavigateTo($"/tasks/{updatedTask.TaskId}");
+            }
+            else
+            {
+                Console.WriteLine("Failed to update task");
+                IsSaving = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating task: {ex.Message}");
+            IsSaving = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        if (Task != null)
+        {
+            NavigationManager.NavigateTo($"/tasks/{Task.TaskId}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/tasks");
+        }
+    }
+}

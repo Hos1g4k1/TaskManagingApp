@@ -1,8 +1,10 @@
 @page "/projects/{Id:long}"
 @using BlazorWebApp.Models
 @using BlazorWebApp.Services
+@using BlazorWebApp.Components.Tasks
 @inject ProjectService ProjectService
 @inject StatusService StatusService
+@inject TaskService TaskService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Project Details - Task Management</PageTitle>
@@ -56,13 +58,45 @@
                     <div class="col-md-3 fw-bold">End Date:</div>
                     <div class="col-md-9">@(Project.EndDate?.ToShortDateString() ?? "Not set")</div>
                 </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Tasks:</div>
+                    <div class="col-md-9">
+                        <span class="badge bg-info">@Tasks.Count Total</span>
+                        @if (Tasks.Any())
+                        {
+                            var completedTasks = Tasks.Count(t => t.StatusName?.ToLower() == "completed");
+                            var overdueTasks = Tasks.Count(t => t.DueDate.HasValue && t.DueDate.Value < DateTime.Now);
+
+                            <span class="badge bg-success ms-2">@completedTasks Completed</span>
+                            @if (overdueTasks > 0)
+                            {
+                                <span class="badge bg-danger ms-2">@overdueTasks Overdue</span>
+                            }
+                        }
+                    </div>
+                </div>
             </div>
         </div>
 
-        <h2>Tasks</h2>
-        <div class="alert alert-info">
-            Task list will be implemented in future updates.
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Project Tasks</h2>
+            <button class="btn btn-success" @onclick="NavigateToCreateTask">
+                <i class="bi bi-plus-circle"></i> Add Task
+            </button>
         </div>
+
+        @if (TasksLoading)
+        {
+            <div class="d-flex justify-content-center my-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading tasks...</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <TaskList Tasks="@Tasks" OnCreateTask="NavigateToCreateTask" OnDeleteTask="HandleDeleteTask" />
+        }
     }
 </div>
 
@@ -71,12 +105,34 @@
     public long Id { get; set; }
 
     private Project? Project { get; set; }
+    private List<TaskItem> Tasks { get; set; } = new();
     private bool IsLoading { get; set; } = true;
+    private bool TasksLoading { get; set; } = true;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async System.Threading.Tasks.Task OnParametersSetAsync()
     {
         IsLoading = true;
+        TasksLoading = true;
 
+        try
+        {
+            // Load project and tasks in parallel
+            await System.Threading.Tasks.Task.WhenAll(
+            LoadProjectAsync(),
+            LoadTasksAsync()
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+
+        IsLoading = false;
+        TasksLoading = false;
+    }
+
+    private async System.Threading.Tasks.Task LoadProjectAsync()
+    {
         try
         {
             Project = await ProjectService.GetProjectByIdAsync(Id);
@@ -93,16 +149,44 @@
         }
         catch (Exception ex)
         {
-            // In a real app, handle the error (log, display to user, etc.)
             Console.WriteLine($"Error loading project: {ex.Message}");
             Project = null;
         }
+    }
 
-        IsLoading = false;
+    private async System.Threading.Tasks.Task LoadTasksAsync()
+    {
+        try
+        {
+            Tasks = await TaskService.GetTasksByProjectAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tasks: {ex.Message}");
+            Tasks = new List<TaskItem>();
+        }
     }
 
     private void NavigateBack()
     {
         NavigationManager.NavigateTo("/dashboard");
+    }
+
+    private void NavigateToCreateTask()
+    {
+        NavigationManager.NavigateTo($"/tasks/create/{Id}");
+    }
+
+    private async System.Threading.Tasks.Task HandleDeleteTask(long taskId)
+    {
+        try
+        {
+            await TaskService.DeleteTaskAsync(taskId);
+            await LoadTasksAsync(); // Refresh the task list
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting task: {ex.Message}");
+        }
     }
 }

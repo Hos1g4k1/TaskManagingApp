@@ -39,10 +39,8 @@ builder.WebHost.UseUrls("http://localhost:5000", "https://localhost:5001");
 
 var app = builder.Build();
 
-
 app.UseCors("AllowAll");
-app.UseHttpsRedirection();
-
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

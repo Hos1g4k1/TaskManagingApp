@@ -1,0 +1,161 @@
+@page "/tasks/create"
+@page "/tasks/create/{ProjectId:long}"
+@using BlazorWebApp.Models
+@using BlazorWebApp.Services
+@using BlazorWebApp.Components.Tasks
+@inject TaskService TaskService
+@inject ProjectService ProjectService
+@inject StatusService StatusService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Create Task - Task Management</PageTitle>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Create New Task</h1>
+        <button class="btn btn-outline-secondary" @onclick="NavigateBack">
+            <i class="bi bi-arrow-left"></i> Back
+        </button>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <TaskForm Task="@Task" Projects="@ProjectDictionary" Statuses="@StatusDictionary" IsEditMode="false"
+                    IsSaving="@IsSaving" OnSubmit="HandleSubmit" OnCancel="NavigateBack" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long? ProjectId { get; set; }
+
+    private TaskItem Task { get; set; } = new();
+    private Dictionary<long, string> ProjectDictionary { get; set; } = new();
+    private Dictionary<long, string> StatusDictionary { get; set; } = new();
+    private List<Project> Projects { get; set; } = new();
+    private List<Status> Statuses { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsSaving { get; set; } = false;
+
+    protected override async System.Threading.Tasks.Task OnInitializedAsync()
+    {
+        await LoadData();
+
+        // If ProjectId is provided, pre-select it
+        if (ProjectId.HasValue)
+        {
+            Task.ProjectId = ProjectId.Value;
+        }
+
+        IsLoading = false;
+    }
+
+    private async System.Threading.Tasks.Task LoadData()
+    {
+        try
+        {
+            await System.Threading.Tasks.Task.WhenAll(
+            LoadProjectsAsync(),
+            LoadStatusesAsync()
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadProjectsAsync()
+    {
+        try
+        {
+            Projects = await ProjectService.GetAllProjectsAsync();
+            ProjectDictionary = Projects.ToDictionary(p => p.ProjectId, p => p.Name ?? "Unknown");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading projects: {ex.Message}");
+            Projects = new List<Project>();
+            ProjectDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadStatusesAsync()
+    {
+        try
+        {
+            Statuses = await StatusService.GetAllStatusesAsync();
+            StatusDictionary = Statuses.ToDictionary(s => s.StatusId, s => s.Name ?? "Unknown");
+
+            // Set default status if available
+            if (Statuses.Any() && Task.StatusId == null)
+            {
+                Task.StatusId = Statuses.FirstOrDefault()?.StatusId;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statuses: {ex.Message}");
+            Statuses = new List<Status>();
+            StatusDictionary = new Dictionary<long, string>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task HandleSubmit(TaskItem task)
+    {
+        Console.WriteLine($"HandleSubmit called with task: Title='{task.Title}', ProjectId={task.ProjectId}, StatusId={task.StatusId}");
+        
+        IsSaving = true;
+
+        try
+        {
+            // Set creation date
+            task.CreatedAt = DateTime.Now;
+            Console.WriteLine($"Set CreatedAt to: {task.CreatedAt}");
+
+            Console.WriteLine("Calling TaskService.CreateTaskAsync");
+            var createdTask = await TaskService.CreateTaskAsync(task);
+            
+            if (createdTask != null)
+            {
+                Console.WriteLine($"Task created successfully - ID: {createdTask.TaskId}, Title: '{createdTask.Title}'");
+                Console.WriteLine($"Navigating to: /tasks/{createdTask.TaskId}");
+                NavigationManager.NavigateTo($"/tasks/{createdTask.TaskId}");
+            }
+            else
+            {
+                Console.WriteLine("Failed to create task - CreateTaskAsync returned null");
+                IsSaving = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating task: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            IsSaving = false;
+        }
+    }
+
+    private void NavigateBack()
+    {
+        if (ProjectId.HasValue)
+        {
+            NavigationManager.NavigateTo($"/projects/{ProjectId.Value}");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/tasks");
+        }
+    }
+}
