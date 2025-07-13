@@ -25,6 +25,7 @@ namespace project
             builder.Services.AddScoped<ProjectService>();
             builder.Services.AddScoped<StatusService>();
             builder.Services.AddScoped<TaskService>();
+            builder.Services.AddScoped<CommentService>();
 
             await builder.Build().RunAsync();
         }

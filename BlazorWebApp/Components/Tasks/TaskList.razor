@@ -29,15 +29,14 @@
                             <th>Due Date</th>
                             <th>Project</th>
                             <th>Comments</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var task in Tasks)
                         {
-                            <tr>
+                            <tr class="task-row" @onclick="() => ViewTask(task.TaskId)" style="cursor: pointer;">
                                 <td>
-                                    <div>
+                                    <div class="task-title-container">
                                         <strong>@task.Title</strong>
                                         @if (!string.IsNullOrEmpty(task.Description))
                                         {
@@ -47,55 +46,54 @@
                                     </div>
                                 </td>
                                 <td>
-                                    @if (!string.IsNullOrEmpty(task.StatusName))
-                                    {
-                                        <span class="badge @GetStatusBadgeClass(task.StatusName)">@task.StatusName</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary">No Status</span>
-                                    }
+                                    <div>
+                                        @if (!string.IsNullOrEmpty(task.StatusName))
+                                        {
+                                            <span class="badge @GetStatusBadgeClass(task.StatusName)">@task.StatusName</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">No Status</span>
+                                        }
+                                    </div>
                                 </td>
                                 <td>
-                                    @if (task.DueDate.HasValue)
-                                    {
-                                        var daysUntilDue = (task.DueDate.Value - DateTime.Now).Days;
-                                        <span class="@GetDueDateClass(daysUntilDue)">
-                                            @task.DueDate.Value.ToString("MMM dd, yyyy")
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">No due date</span>
-                                    }
+                                    <div>
+                                        @if (task.DueDate.HasValue)
+                                        {
+                                            var daysUntilDue = (task.DueDate.Value - DateTime.Now).Days;
+                                            <span class="@GetDueDateClass(daysUntilDue)">
+                                                @task.DueDate.Value.ToString("MMM dd, yyyy")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No due date</span>
+                                        }
+                                    </div>
                                 </td>
                                 <td>
-                                    @if (!string.IsNullOrEmpty(task.ProjectName))
-                                    {
-                                        <span class="badge bg-info">@task.ProjectName</span>
-                                    }
+                                    <div>
+                                        @if (!string.IsNullOrEmpty(task.ProjectName))
+                                        {
+                                            <span class="badge bg-info">@task.ProjectName</span>
+                                        }
+                                    </div>
                                 </td>
                                 <td>
-                                    @if (task.CommentCount > 0)
-                                    {
-                                        <span class="badge bg-primary">@task.CommentCount</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">0</span>
-                                    }
-                                </td>
-                                <td>
-                                    <div class="btn-group" role="group">
-                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewTask(task.TaskId)">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditTask(task.TaskId)">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => OnDeleteTask.InvokeAsync(task.TaskId)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
+                                    <div>
+                                        @if (task.CommentCount > 0)
+                                        {
+                                            <span class="badge bg-primary">
+                                                <i class="bi bi-chat-dots me-1"></i>@task.CommentCount
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">
+                                                <i class="bi bi-chat-dots me-1"></i>0
+                                            </span>
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -106,6 +104,24 @@
         }
     </div>
 </div>
+
+<style>
+    .task-row {
+        transition: background-color 0.2s ease;
+    }
+
+    .task-row:hover {
+        background-color: rgba(0, 123, 255, 0.05) !important;
+    }
+
+    .task-title-container {
+        padding: 4px 0;
+    }
+
+    .task-row td > div {
+        padding: 4px 0;
+    }
+</style>
 
 @code {
     [Parameter] public List<TaskItem>? Tasks { get; set; }
