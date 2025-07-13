@@ -17,11 +17,13 @@ var supabaseConfiguration = builder.Configuration
 builder.Services.AddScoped<Supabase.Client>(
     provider => new Supabase.Client(supabaseConfiguration.Url, supabaseConfiguration.Key));
 
+// Register repositories in dependency order
 builder.Services.AddScoped<IStatusRepository, StatusRepository>();
 builder.Services.AddScoped<ICommentRepository, CommentRepository>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 builder.Services.AddScoped<ITaskDependencyRepository, TaskDependencyRepository>();
+
 builder.Services.AddControllers();
 builder.Services.AddControllers().AddNewtonsoftJson();
 

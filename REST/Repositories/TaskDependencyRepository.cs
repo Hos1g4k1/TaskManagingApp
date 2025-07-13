@@ -13,11 +13,13 @@ namespace REST.Repositories
     public class TaskDependencyRepository : ITaskDependencyRepository
     {
         private readonly Supabase.Client _supabaseClient;
+        private readonly ITaskRepository _taskRepository;
         private readonly ILogger<TaskDependencyRepository> _logger;
 
-        public TaskDependencyRepository(Supabase.Client supabaseClient, ILogger<TaskDependencyRepository> logger)
+        public TaskDependencyRepository(Supabase.Client supabaseClient, ITaskRepository taskRepository, ILogger<TaskDependencyRepository> logger)
         {
             _supabaseClient = supabaseClient;
+            _taskRepository = taskRepository;
             _logger = logger;
         }
 
@@ -26,13 +28,13 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Fetching all task dependencies");
-                
+
                 var response = await _supabaseClient
                     .From<TaskDependency>()
                     .Get();
 
                 var dependencies = response.Models;
-                
+
                 // Load related tasks for each dependency
                 foreach (var dependency in dependencies)
                 {
@@ -61,23 +63,23 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Fetching task dependency with ID {DependencyId}", dependencyId);
-                
+
                 var response = await _supabaseClient
                     .From<TaskDependency>()
                     .Where(d => d.DependencyId == dependencyId)
                     .Get();
-                    
+
                 if (response == null || response.Models.Count == 0)
                 {
                     _logger.LogWarning("Dependency with ID {DependencyId} was not found", dependencyId);
                     throw new Exception($"Dependency with ID {dependencyId} not found");
                 }
-                
+
                 var dependency = response.Models.First();
-                
+
                 // Load related tasks
                 await LoadRelatedTasksSafely(dependency);
-                
+
                 _logger.LogInformation("Successfully fetched dependency with ID {DependencyId}", dependencyId);
                 return dependency;
             }
@@ -93,19 +95,19 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Fetching dependencies for task ID {TaskId}", taskId);
-                
+
                 // Get dependencies where this task is the dependent (the task that depends on others)
                 var response = await _supabaseClient
                     .From<TaskDependency>()
                     .Where(d => d.DependentTaskId == taskId)
                     .Get();
-                    
+
                 if (response == null)
                 {
                     _logger.LogWarning("No dependencies found for task ID {TaskId}", taskId);
                     return new List<TaskDependency>();
                 }
-                
+
                 var dependencies = response.Models;
 
                 // Load related tasks for each dependency
@@ -136,19 +138,19 @@ namespace REST.Repositories
             try
             {
                 _logger.LogInformation("Fetching dependents for task ID {TaskId}", taskId);
-                
+
                 // Get dependencies where this task is the prerequisite (tasks that depend on this task)
                 var response = await _supabaseClient
                     .From<TaskDependency>()
                     .Where(d => d.TaskId == taskId)
                     .Get();
-                    
+
                 if (response == null)
                 {
                     _logger.LogWarning("No dependents found for task ID {TaskId}", taskId);
                     return new List<TaskDependency>();
                 }
-                
+
                 var dependencies = response.Models;
 
                 // Load related tasks for each dependency
@@ -181,7 +183,7 @@ namespace REST.Repositories
                 // Clear navigation properties before inserting
                 var task = dependency.Task;
                 var dependentTask = dependency.DependentTask;
-                
+
                 dependency.Task = null;
                 dependency.DependentTask = null;
 
@@ -189,17 +191,15 @@ namespace REST.Repositories
                     .From<TaskDependency>()
                     .Insert(dependency);
 
-                _logger.LogInformation("Added new dependency between tasks {TaskId} and {DependentTaskId}", 
+                _logger.LogInformation("Added new dependency between tasks {TaskId} and {DependentTaskId}",
                     dependency.TaskId, dependency.DependentTaskId);
-                
+
                 var newDependency = response.Models.FirstOrDefault();
-                
+
                 if (newDependency != null)
                 {
-                    // Restore navigation properties if needed
-                    newDependency.Task = task;
-                    newDependency.DependentTask = dependentTask;
-                    
+                    // Load related tasks for the new dependency
+                    await LoadRelatedTasksSafely(newDependency);
                     return newDependency;
                 }
                 else
@@ -212,7 +212,7 @@ namespace REST.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error adding dependency between tasks {TaskId} and {DependentTaskId}", 
+                _logger.LogError(ex, "Error adding dependency between tasks {TaskId} and {DependentTaskId}",
                     dependency.TaskId, dependency.DependentTaskId);
                 throw;
             }
@@ -225,7 +225,7 @@ namespace REST.Repositories
                 // Clear navigation properties before updating
                 var task = dependency.Task;
                 var dependentTask = dependency.DependentTask;
-                
+
                 dependency.Task = null;
                 dependency.DependentTask = null;
 
@@ -235,15 +235,13 @@ namespace REST.Repositories
                     .Update(dependency);
 
                 _logger.LogInformation("Updated dependency with ID {DependencyId}", dependency.DependencyId);
-                
+
                 var updatedDependency = response.Models.FirstOrDefault();
-                
+
                 if (updatedDependency != null)
                 {
-                    // Restore navigation properties if needed
-                    updatedDependency.Task = task;
-                    updatedDependency.DependentTask = dependentTask;
-                    
+                    // Load related tasks for the updated dependency
+                    await LoadRelatedTasksSafely(updatedDependency);
                     return updatedDependency;
                 }
                 else
@@ -304,44 +302,38 @@ namespace REST.Repositories
             return TaskDependencyDto.FromTaskDependencies(dependents);
         }
 
-        // Helper method to safely load related tasks
+        // Helper method to safely load related tasks using TaskRepository
         private async System.Threading.Tasks.Task LoadRelatedTasksSafely(TaskDependency dependency)
         {
-            // Load Task (the prerequisite task)
+            // Load Task (the prerequisite task) using TaskRepository
             try
             {
-                var task = await _supabaseClient
-                    .From<Models.Task>()
-                    .Where(t => t.TaskId == dependency.TaskId)
-                    .Get();
-                    
-                if (task != null && task.Models.Count > 0)
+                var task = await _taskRepository.GetTaskByIdAsync(dependency.TaskId);
+                if (task != null)
                 {
-                    dependency.Task = task.Models.First();
+                    dependency.Task = task;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not load Task for Dependency {DependencyId}", dependency.DependencyId);
+                _logger.LogWarning(ex, "Could not load Task {TaskId} for Dependency {DependencyId}",
+                    dependency.TaskId, dependency.DependencyId);
             }
-            
-            // Load DependentTask (the task that depends on the prerequisite)
+
+            // Load DependentTask (the task that depends on the prerequisite) using TaskRepository
             try
             {
-                var dependentTask = await _supabaseClient
-                    .From<Models.Task>()
-                    .Where(t => t.TaskId == dependency.DependentTaskId)
-                    .Get();
-                    
-                if (dependentTask != null && dependentTask.Models.Count > 0)
+                var dependentTask = await _taskRepository.GetTaskByIdAsync(dependency.DependentTaskId);
+                if (dependentTask != null)
                 {
-                    dependency.DependentTask = dependentTask.Models.First();
+                    dependency.DependentTask = dependentTask;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Could not load DependentTask for Dependency {DependencyId}", dependency.DependencyId);
+                _logger.LogWarning(ex, "Could not load DependentTask {DependentTaskId} for Dependency {DependencyId}",
+                    dependency.DependentTaskId, dependency.DependencyId);
             }
         }
     }
-} 
+}

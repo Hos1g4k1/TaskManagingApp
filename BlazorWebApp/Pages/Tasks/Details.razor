@@ -3,6 +3,7 @@
 @using BlazorWebApp.Services
 @inject TaskService TaskService
 @inject CommentService CommentService
+@inject TaskDependencyService TaskDependencyService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Task Details - @(Task?.Title ?? "Loading...")</PageTitle>
@@ -99,6 +100,117 @@
                                         @((MarkupString)Task.Description.Replace("\n", "<br>"))
                                     </div>
                                 </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Task Dependencies Section -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Task Dependencies</h5>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="ToggleManageDependencies">
+                            <i class="bi bi-gear"></i> Manage Dependencies
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (ShowManageDependencies)
+                        {
+                            <div class="mb-4 p-3 border rounded bg-light">
+                                <h6>Add New Dependency</h6>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <select @bind="SelectedDependencyTaskId" class="form-select">
+                                            <option value="0">Select a task this task depends on...</option>
+                                            @foreach (var availableTask in AvailableTasks)
+                                            {
+                                                <option value="@availableTask.TaskId">@availableTask.Title</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button class="btn btn-primary" @onclick="AddDependency" disabled="@(SelectedDependencyTaskId == 0 || IsAddingDependency)">
+                                            @if (IsAddingDependency)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                            }
+                                            Add Dependency
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (Dependencies.Count == 0)
+                        {
+                            <div class="text-center py-4">
+                                <i class="bi bi-link text-muted" style="font-size: 2rem;"></i>
+                                <p class="text-muted mt-2">This task has no dependencies</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Dependencies (Tasks this task depends on):</h6>
+                                    @if (Dependencies.Count == 0)
+                                    {
+                                        <p class="text-muted">None</p>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var dependency in Dependencies)
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                                                <div>
+                                                    <a href="/tasks/@dependency.TaskId" class="text-decoration-none">
+                                                        @dependency.TaskTitle
+                                                    </a>
+                                                    @if (!string.IsNullOrEmpty(dependency.TaskStatusName))
+                                                    {
+                                                        <span class="badge @GetStatusBadgeClass(dependency.TaskStatusName) ms-2">
+                                                            @dependency.TaskStatusName
+                                                        </span>
+                                                    }
+                                                </div>
+                                                @if (ShowManageDependencies)
+                                                {
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteDependency(dependency.DependencyId)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Dependents (Tasks that depend on this task):</h6>
+                                    @if (Dependents.Count == 0)
+                                    {
+                                        <p class="text-muted">None</p>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var dependent in Dependents)
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                                                <div>
+                                                    <a href="/tasks/@dependent.DependentTaskId" class="text-decoration-none">
+                                                        @dependent.DependentTaskTitle
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (!CanTaskBeCompleted)
+                        {
+                            <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Note:</strong> This task cannot be completed until all its dependencies are completed.
                             </div>
                         }
                     </div>
@@ -247,6 +359,9 @@
 
     private TaskItem? Task { get; set; }
     private List<Comment> Comments { get; set; } = new();
+    private List<TaskDependency> Dependencies { get; set; } = new();
+    private List<TaskDependency> Dependents { get; set; } = new();
+    private List<TaskItem> AvailableTasks { get; set; } = new();
     private Comment NewComment { get; set; } = new();
     private Comment EditingComment { get; set; } = new();
     private long EditingCommentId { get; set; } = 0;
@@ -254,6 +369,10 @@
     private bool ShowAddComment { get; set; } = false;
     private bool IsAddingComment { get; set; } = false;
     private bool IsUpdatingComment { get; set; } = false;
+    private bool ShowManageDependencies { get; set; } = false;
+    private bool IsAddingDependency { get; set; } = false;
+    private long SelectedDependencyTaskId { get; set; } = 0;
+    private bool CanTaskBeCompleted { get; set; } = true;
 
     // Navigation URLs
     private string tasksUrl = "/tasks";
@@ -264,6 +383,9 @@
     {
         await LoadTask();
         await LoadComments();
+        await LoadDependencies();
+        await LoadAvailableTasks();
+        await CheckTaskCompletionEligibility();
         InitializeNewComment();
         IsLoading = false;
     }
@@ -294,6 +416,49 @@
         }
     }
 
+    private async System.Threading.Tasks.Task LoadDependencies()
+    {
+        try
+        {
+            Dependencies = await TaskDependencyService.GetDependenciesForTaskAsync(Id);
+            Dependents = await TaskDependencyService.GetDependentsForTaskAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dependencies: {ex.Message}");
+            Dependencies = new List<TaskDependency>();
+            Dependents = new List<TaskDependency>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadAvailableTasks()
+    {
+        try
+        {
+            var allTasks = await TaskService.GetAllTasksAsync();
+            // Filter out the current task and tasks that would create circular dependencies
+            AvailableTasks = allTasks.Where(t => t.TaskId != Id).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading available tasks: {ex.Message}");
+            AvailableTasks = new List<TaskItem>();
+        }
+    }
+
+    private async System.Threading.Tasks.Task CheckTaskCompletionEligibility()
+    {
+        try
+        {
+            CanTaskBeCompleted = await TaskDependencyService.CanTaskBeCompletedAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking task completion eligibility: {ex.Message}");
+            CanTaskBeCompleted = true;
+        }
+    }
+
     private void InitializeNewComment()
     {
         NewComment = new Comment
@@ -309,6 +474,63 @@
         if (ShowAddComment)
         {
             InitializeNewComment();
+        }
+    }
+
+    private void ToggleManageDependencies()
+    {
+        ShowManageDependencies = !ShowManageDependencies;
+    }
+
+    private async System.Threading.Tasks.Task AddDependency()
+    {
+        if (SelectedDependencyTaskId == 0)
+            return;
+
+        IsAddingDependency = true;
+
+        try
+        {
+            var newDependency = new TaskDependency
+            {
+                TaskId = SelectedDependencyTaskId,
+                DependentTaskId = Id
+            };
+
+            var createdDependency = await TaskDependencyService.CreateDependencyAsync(newDependency);
+            
+            if (createdDependency != null)
+            {
+                await LoadDependencies();
+                await CheckTaskCompletionEligibility();
+                SelectedDependencyTaskId = 0;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding dependency: {ex.Message}");
+        }
+        finally
+        {
+            IsAddingDependency = false;
+        }
+    }
+
+    private async System.Threading.Tasks.Task DeleteDependency(long dependencyId)
+    {
+        try
+        {
+            if (await TaskDependencyService.DeleteDependencyAsync(dependencyId))
+            {
+                await LoadDependencies();
+                await CheckTaskCompletionEligibility();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting dependency: {ex.Message}");
         }
     }
 

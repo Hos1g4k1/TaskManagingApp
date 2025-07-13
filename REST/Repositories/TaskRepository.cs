@@ -120,6 +120,7 @@ namespace REST.Repositories
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error fetching task directly with ID {TaskId}. Error details: {ErrorMessage}",
                     taskId, ex.ToString());
                 throw;
             }

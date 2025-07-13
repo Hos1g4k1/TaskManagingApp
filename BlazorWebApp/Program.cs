@@ -20,12 +20,13 @@ namespace project
                     builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress)
                 });
 
-            // Register services
+            // Register services in dependency order
             builder.Services.AddScoped<HttpClientService>();
             builder.Services.AddScoped<ProjectService>();
             builder.Services.AddScoped<StatusService>();
             builder.Services.AddScoped<TaskService>();
             builder.Services.AddScoped<CommentService>();
+            builder.Services.AddScoped<TaskDependencyService>();
 
             await builder.Build().RunAsync();
         }

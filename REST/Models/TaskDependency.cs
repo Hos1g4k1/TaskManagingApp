@@ -16,10 +16,8 @@ namespace REST.Models
         [Column("dependent_task_id")]
         public long DependentTaskId { get; set; }
 
-        [Reference(typeof(Task))]
+        // Navigation properties - loaded manually to avoid Supabase ORM confusion
         public Task? Task { get; set; }
-
-        [Reference(typeof(Task))]
         public Task? DependentTask { get; set; }
     }
 }
